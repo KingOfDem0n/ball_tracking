@@ -18,6 +18,14 @@ def findBox(contours, thresh=0.8):
 
     return new_cnt
 
+def checkSize(contours, thresh=70):
+    new_cnt = []
+    for cnt in contours:
+        area = cv.contourArea(cnt)
+        if area >= thresh:
+            new_cnt.append(cnt)
+    return new_cnt
+
 def approximateContour(contours, k):
     approx = []
     for cnt in contours:
@@ -56,6 +64,33 @@ def drawCenters(frame, centers):
     for c in centers:
         cv.circle(frame, c, 3, (0,0,255), -1)
 
+def segmentRedBox(frame):
+    hsv = cv.cvtColor(frame.copy(), cv.COLOR_BGR2HSV)
+    mask1 = cv.inRange(hsv, (0, 70, 70), (8, 255, 255))
+    mask2 = cv.inRange(hsv, (170, 70, 70), (180, 255, 255))
+    mask = cv.bitwise_or(mask1, mask2)
+
+    result = cv.bitwise_and(frame, frame, mask=mask)
+    result = cv.medianBlur(result, 21)
+    kernel = cv.getStructuringElement(cv.MORPH_RECT,(5,5))
+    result = cv.morphologyEx(result, cv.MORPH_OPEN, kernel)
+    gray = cv.cvtColor(result, cv.COLOR_BGR2GRAY)
+    _, result = cv.threshold(gray, 0, 255, 0)
+    im2, contours, hierarchy = cv.findContours(result, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+    new_contours = findBox(contours, 0.7)
+    new_contours = checkSolidity(new_contours, 0.5)
+    new_contours = checkSize(new_contours, 200)
+
+    return new_contours
+
+def narrowSearchSpace(frame, contours):
+    boxes = roatedRectangle(contours)
+    e = 50
+    enlarged_boxes = []
+    for box in boxes:
+        x,y,w,h = cv.boundingRect(box)
+        cv.rectangle(frame,(x-e,y-e),(x+w+e,y+h+e),(0,0,255),2)
+
 if __name__ == "__main__":
     cap = cv.VideoCapture(1)
 
@@ -63,26 +98,16 @@ if __name__ == "__main__":
         # Capture frame-by-frame
         ret, frame = cap.read()
 
-        hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-        mask1 = cv.inRange(hsv, (0, 100, 100), (5, 255, 255))
-        mask2 = cv.inRange(hsv, (175, 100, 100), (180, 255, 255))
-        mask = cv.bitwise_or(mask1, mask2)
-
-        result = cv.bitwise_and(frame, frame, mask=mask)
-        gray = cv.cvtColor(result, cv.COLOR_BGR2GRAY)
-        _, result = cv.threshold(gray, 0, 255, 0)
-        im2, contours, hierarchy = cv.findContours(result, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
-        new_contours = findBox(contours, 0.7)
-        new_contours = checkSolidity(new_contours, 0.5)
-        boxes = roatedRectangle(new_contours)
+        new_contours = segmentRedBox(frame)
+        narrowSearchSpace(frame, new_contours)
 
         centers = getCenter(new_contours)
-        result = cv.cvtColor(result, cv.COLOR_GRAY2BGR)
-        cv.drawContours(result, new_contours, -1, (0,255,0), 3)
-        drawCenters(result, centers)
+        # result = cv.cvtColor(result, cv.COLOR_GRAY2BGR)
+        cv.drawContours(frame, new_contours, -1, (0,255,0), 3)
+        drawCenters(frame, centers)
 
         # Display the resulting frame
-        cv.imshow('frame',result)
+        cv.imshow('frame',frame)
         if cv.waitKey(1) & 0xFF == ord('q'):
             break
 
