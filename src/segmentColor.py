@@ -66,8 +66,8 @@ def drawCenters(frame, centers):
 
 def segmentRedBox(frame):
     hsv = cv.cvtColor(frame.copy(), cv.COLOR_BGR2HSV)
-    mask1 = cv.inRange(hsv, (0, 70, 70), (8, 255, 255))
-    mask2 = cv.inRange(hsv, (170, 70, 70), (180, 255, 255))
+    mask1 = cv.inRange(hsv, (0, 50, 50), (8, 255, 255)) # (0, 70, 70), (8, 255, 255)
+    mask2 = cv.inRange(hsv, (170, 50, 50), (180, 255, 255)) # (170, 70, 70), (180, 255, 255)
     mask = cv.bitwise_or(mask1, mask2)
 
     result = cv.bitwise_and(frame, frame, mask=mask)
@@ -76,7 +76,7 @@ def segmentRedBox(frame):
     result = cv.morphologyEx(result, cv.MORPH_OPEN, kernel)
     gray = cv.cvtColor(result, cv.COLOR_BGR2GRAY)
     _, result = cv.threshold(gray, 0, 255, 0)
-    im2, contours, hierarchy = cv.findContours(result, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+    contours, hierarchy = cv.findContours(result, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
     new_contours = findBox(contours, 0.7)
     new_contours = checkSolidity(new_contours, 0.5)
     new_contours = checkSize(new_contours, 200)
@@ -85,11 +85,25 @@ def segmentRedBox(frame):
 
 def narrowSearchSpace(frame, contours):
     boxes = roatedRectangle(contours)
-    e = 50
-    enlarged_boxes = []
+    e = 0
     for box in boxes:
         x,y,w,h = cv.boundingRect(box)
         cv.rectangle(frame,(x-e,y-e),(x+w+e,y+h+e),(0,0,255),2)
+
+def lawsTextureEnergy(frame, m):
+    vector = {"L": np.array([1, 4, 6, 4, 1]),
+              "E": np.array([-1, -2, 0, 2, 1]),
+              "S": np.array([-1, 0, 2, 0, -1]),
+              "R": np.array([1, -4, 6, -4, 1]),
+              "W": np.array([-1, 2, 0, -2, 1])}
+
+    gray = cv.cvtColor(frame.copy(), cv.COLOR_BGR2GRAY)
+    avg = cv.blur(gray, (15, 15))
+    filter_img = np.abs(gray - avg)
+    kernel = np.outer(vector[m[0]], vector[m[1]])
+    texture = np.abs(cv.filter2D(filter_img, -1, kernel))
+
+    textureEnergyMap = cv.filter2D(texture, -1, np.ones((15, 15)))
 
 if __name__ == "__main__":
     cap = cv.VideoCapture(1)
@@ -99,10 +113,11 @@ if __name__ == "__main__":
         ret, frame = cap.read()
 
         new_contours = segmentRedBox(frame)
-        narrowSearchSpace(frame, new_contours)
+        # narrowSearchSpace(frame, new_contours)
+        # box = roatedRectangle(new_contours)
+        # cv.drawContours(frame, box, 0, (0, 0, 255), 2)
 
         centers = getCenter(new_contours)
-        # result = cv.cvtColor(result, cv.COLOR_GRAY2BGR)
         cv.drawContours(frame, new_contours, -1, (0,255,0), 3)
         drawCenters(frame, centers)
 
