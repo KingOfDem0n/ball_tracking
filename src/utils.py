@@ -1,4 +1,5 @@
 import cv2 as cv
+import numpy as np
 
 def preprocess(img):
     _, binary = cv.threshold(img, 127, 255, type=cv.THRESH_BINARY)
@@ -36,3 +37,34 @@ def loadReference(file, classes):
             count += 1
             line = f.readline()
     return ref
+
+def euclideanDist(A, B):
+    return np.sqrt(np.sum((A - B)**2))
+
+def NVIP(A, B):
+    denom = np.sum(A*B)
+    numer = np.sqrt(np.sum(A**2))*np.sqrt(np.sum(B**2))
+
+    return denom/numer
+
+def Tanimoto(A, B):
+    ab = np.sum(A*B)
+    a2 = np.sum(A**2)
+    b2 = np.sum(B**2)
+
+    return ab/(a2 + b2 - ab)
+
+def R2(A, B):
+    a_bar = np.mean(A)
+    b_bar = np.mean(B)
+    denom = np.sum((A-a_bar)*(B-b_bar))
+    numer = np.sqrt(np.sum((A-a_bar)**2)*np.sum((B-b_bar)**2))
+
+    return denom/numer
+
+def compare(ref, feat):
+    euclid = euclideanDist(ref, feat)
+    nvip = NVIP(ref, feat)
+    T = Tanimoto(ref, feat)
+    r2 = R2(ref, feat)
+    return euclid, nvip, T, r2

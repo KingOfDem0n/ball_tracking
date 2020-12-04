@@ -3,11 +3,12 @@
 import os
 import numpy as np
 from tqdm import tqdm
+from scipy.optimize import nnls
 from shapefeatures import *
 from utils import *
 import cv2 as cv
 
-def train(classes):
+def train(classes, save_mode=False):
     for c in classes:
         pic_names = os.listdir("../images/Train/{}".format(c))
         features = []
@@ -16,7 +17,7 @@ def train(classes):
             processed = preprocess(img)
             contours, _ = cv.findContours(processed, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
             for cnt in contours:
-                if cv.contourArea(cnt) >= 100:
+                if cv.contourArea(cnt) >= 300:
                     bgr = cv.cvtColor(processed, cv.COLOR_GRAY2BGR)
                     cv.drawContours(bgr, cnt, -1, (0, 255, 0), 2)
                     cv.imshow("Contours", bgr)
@@ -24,11 +25,13 @@ def train(classes):
                     if key == ord('s'):
                         features.append(customFeatures(cnt))
                         print("Save features!")
-        saveFeatures(c, features)
+        if save_mode == 1:
+            saveFeatures(c, features)
     cv.destroyAllWindows()
 
 def test(target, classes, display=False):
-    ref = loadReference("../featureInfo/shapeFeatures.txt", classes)
+    ref = loadReference("../featureInfo/normalizedShapeFeatures.txt", classes)
+    norm_param = np.array(loadFeatures("../featureInfo/normalizedParameters.txt"))
     one_ref = np.array(ref[target])
     correct = 0
     incorrect = 0
@@ -44,14 +47,19 @@ def test(target, classes, display=False):
             for cnt in contours:
                 if cv.contourArea(cnt) >= 300:
                     feat = np.array(customFeatures(cnt))
-                    dist = np.sqrt(np.sum((one_ref - feat)**2))
+                    norm = (feat - norm_param[0])/norm_param[1]
+                    result = compare(one_ref, norm)
+                    dist = result[1]
                     if display:
-                        print("Distance: {}".format(dist))
+                        print("Euclid: {}".format(result[0]))
+                        print("NVIP: {}".format(result[1]))
+                        print("Tanimoto: {}".format(result[2]))
+                        print("R2: {}".format(result[3]))
                         bgr = cv.cvtColor(processed, cv.COLOR_GRAY2BGR)
                         cv.drawContours(bgr, cnt, -1, (0, 255, 0), 2)
                         cv.imshow("Contours", bgr)
                         cv.waitKey(0)
-                    if dist < 0.1:
+                    if dist >= 0.95:
                         if target == c:
                             if display:
                                 print("Correct!")
@@ -67,6 +75,43 @@ def test(target, classes, display=False):
                             cv.waitKey(0)
 
     return correct/num_test, incorrect
+
+def getPredictAndTruth(classes):
+    ref = loadReference("../featureInfo/normalizedShapeFeatures.txt", classes)
+    norm_param = np.array(loadFeatures("../featureInfo/normalizedParameters.txt"))
+    output = []
+    for c in classes:
+        one_ref = np.array(ref[c])
+        pic_names = os.listdir("../images/Train/{}".format(c))
+        for n in tqdm(pic_names, desc=c):
+            img = cv.imread("../images/Train/{}/{}".format(c, n))
+            processed = preprocess(img)
+            contours, _ = cv.findContours(processed, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+            for cnt in contours:
+                if cv.contourArea(cnt) >= 300:
+                    bgr = cv.cvtColor(processed, cv.COLOR_GRAY2BGR)
+                    cv.drawContours(bgr, cnt, -1, (0, 255, 0), 2)
+                    cv.imshow("Contours", bgr)
+                    key = cv.waitKey(0) & 0xFF
+                    feat = np.array(customFeatures(cnt))
+                    norm = (feat - norm_param[0]) / norm_param[1]
+                    if key == ord('s'):
+                        output.append(list(compare(one_ref, norm)[1:]) + [1])
+                    else:
+                        output.append(list(compare(one_ref, norm)[1:]) + [-1])
+
+    saveFeatures("PredictionAndTruth", output)
+
+    cv.destroyAllWindows()
+
+def findEnsembleCoeff():
+    info = np.array(loadFeatures("../featureInfo/PredictionAndTruth.txt"))
+    A = info[:, :-1]
+    b = info[:, -1]
+
+    out = nnls(A, b)
+
+    return out
 
 def testAll(classes, display=False):
     result = []
@@ -90,11 +135,27 @@ def processAllFeatures(classes):
         features.append(mean.tolist())
     saveFeatures("shapeFeatures", features)
 
+def normalizeAllFeatures(classes):
+    features = []
+    all_feat = []
+    for c in classes:
+        feat = loadFeatures("../featureInfo/{}.txt".format(c))
+        mean, std = processFeatures(feat)
+        features.append(mean)
+        all_feat += feat
+
+    mean, std = processFeatures(all_feat)
+    norm_param = np.vstack((mean, std)).tolist()
+    features = np.array(features)
+    norm = ((features - mean)/std).tolist()
+    saveFeatures("normalizedParameters", norm_param)
+    saveFeatures("normalizedShapeFeatures", norm)
+
 if __name__ == "__main__":
     cap = cv.VideoCapture(1)
     classes = ["5-points-Star", "8-points-Star", "Arrow", "Heart", "Octagon", "Rainbow", "Triangle"]
-    # test("Heart", classes, True)
-    results = testAll(classes, display=False)
-    print(results)
+    result = testAll(classes, True)
+    print(result)
 
+# Eculidean distance seems to be around 0.1 when target is selected
 
