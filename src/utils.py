@@ -1,5 +1,6 @@
 import cv2 as cv
 import numpy as np
+from shapefeatures import customFeatures
 
 def preprocess(img):
     _, binary = cv.threshold(img, 127, 255, type=cv.THRESH_BINARY)
@@ -68,3 +69,30 @@ def compare(ref, feat):
     T = Tanimoto(ref, feat)
     r2 = R2(ref, feat)
     return euclid, nvip, T, r2
+
+def predict(img, classes, ref, mode=0):
+    processed = preprocess(img)
+    contours, _ = cv.findContours(processed, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+    min_dist = float('inf')
+    max_similarity = -float('inf')
+    contour = None
+    pred = ""
+    for cnt in contours:
+        if cv.contourArea(cnt) >= 500:
+            for c in classes:
+                one_ref = np.array(ref[c])
+                feat = np.array(customFeatures(cnt))
+                dist = compare(one_ref, feat)[mode]
+                if mode == 0 and dist < min_dist:
+                    contour = cnt
+                    min_dist = dist
+                    pred = c
+                elif dist > max_similarity:
+                    contour = cnt
+                    max_similarity = dist
+                    pred = c
+
+    if mode == 0:
+        return min_dist, pred, contour, processed
+
+    return max_similarity, pred, contour, processed

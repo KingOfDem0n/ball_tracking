@@ -2,11 +2,14 @@
 
 import os
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
+import datetime
 from scipy.optimize import nnls
 from shapefeatures import *
 from utils import *
 import cv2 as cv
+
 
 def train(classes, save_mode=False):
     for c in classes:
@@ -45,7 +48,7 @@ def test(target, classes, display=False):
             processed = preprocess(img)
             contours, _ = cv.findContours(processed, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
             for cnt in contours:
-                if cv.contourArea(cnt) >= 300:
+                if cv.contourArea(cnt) >= 500:
                     feat = np.array(customFeatures(cnt))
                     norm = (feat - norm_param[0])/norm_param[1]
                     result = compare(one_ref, norm)
@@ -113,12 +116,48 @@ def findEnsembleCoeff():
 
     return out
 
-def testAll(classes, display=False):
+def testAll(classes, mode=0, save=True, display=False):
     result = []
-    for c in tqdm(classes, desc="Testing all classes"):
-        result.append(test(c, classes, display))
+    num_test = []
+    ref = loadReference("../featureInfo/shapeFeatures.txt", classes)
+    # result.append(test(c, classes, display))
 
-    return result
+    for c in classes:
+        pic_names = os.listdir("../images/Test/{}".format(c))
+        num_test.append(len(pic_names))
+
+    for i, target in enumerate(tqdm(classes, desc="Testing all classes")):
+        result.append([0]*len(classes))
+        for j, c in enumerate(classes):
+            pic_names = os.listdir("../images/Test/{}".format(c))
+            for n in pic_names:
+                img = cv.imread("../images/Test/{}/{}".format(c, n))
+                dist, pred, cnt, processed = predict(img, classes, ref, mode)
+
+                if mode == 0 and dist <= 0.1 and pred == target:
+                    result[i][j] += 1
+                elif dist > 0.9 and pred == target:
+                    result[i][j] += 1
+
+                if display and target == c:
+                    print("Metric: {}".format(dist), end="\t")
+                    print("Predict: {}".format(pred))
+                    bgr = cv.cvtColor(processed, cv.COLOR_GRAY2BGR)
+                    cv.drawContours(bgr, cnt, -1, (0, 255, 0), 2)
+                    cv.imshow("Contours", bgr)
+                    cv.waitKey(0)
+
+    # output = np.vstack((result, num_test))
+    output = np.array(result).T
+    if save:
+        df = pd.DataFrame(output, index=classes, columns=classes)
+
+        filler = datetime.datetime.now()
+        path = "../results/{}-{}-{}-{}-{}-Tanimoto.xlsx".format(filler.year, filler.month, filler.day, filler.hour, filler.minute)
+
+        df.to_excel(path)
+
+    return output
 
 def processFeatures(feat):
     array = np.array(feat)
@@ -152,9 +191,8 @@ def normalizeAllFeatures(classes):
     saveFeatures("normalizedShapeFeatures", norm)
 
 if __name__ == "__main__":
-    cap = cv.VideoCapture(1)
     classes = ["5-points-Star", "8-points-Star", "Arrow", "Heart", "Octagon", "Rainbow", "Triangle"]
-    result = testAll(classes, True)
+    result = testAll(classes, 0, False, True)
     print(result)
 
 # Eculidean distance seems to be around 0.1 when target is selected

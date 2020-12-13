@@ -7,26 +7,6 @@ from features import getCenter, drawCenters
 from utils import *
 import cv2 as cv
 
-def predict(img, classes, ref, ref_norm, norm_param):
-    processed = preprocess(img)
-    contours, _ = cv.findContours(processed, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
-    max_dist = -1
-    min_dist = float('inf')
-    contour = None
-    pred = ""
-    for cnt in contours:
-        if cv.contourArea(cnt) >= 300:
-            for c in classes:
-                one_ref = np.array(ref[c])
-                feat = np.array(customFeatures(cnt))
-                dist = compare(one_ref, feat)[0]
-                if dist < min_dist:
-                    contour = cnt
-                    min_dist = dist
-                    pred = c
-
-    return min_dist, pred, contour, processed
-
 if __name__ == "__main__":
     cap = cv.VideoCapture(1)
     classes = ["5-points-Star", "8-points-Star", "Arrow", "Heart", "Octagon", "Rainbow", "Triangle"]
@@ -39,7 +19,7 @@ if __name__ == "__main__":
         while True:
             ret, frame = cap.read()
 
-            dist, pred, cnt, debug = predict(frame, classes, ref, ref_norm, norm_param)
+            dist, pred, cnt, debug = predict(frame, classes, ref, 0)
             bgr = cv.cvtColor(debug, cv.COLOR_GRAY2BGR)
             if cnt is not None and dist <= 0.1:
                 if target is None:
