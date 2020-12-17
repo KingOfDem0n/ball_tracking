@@ -2,6 +2,4 @@
   <include file="$(find turtlebot_arm_moveit_config)/launch/turtlebot_arm_moveit.launch">
     <arg name="sim" value="true"/>
   </include>
-
-  
 </launch>

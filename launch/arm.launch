@@ -1,0 +1,10 @@
+<launch>
+  <include file="$(find turtlebot_arm_bringup)/launch/arm.launch"/>
+
+  <include file="$(find turtlebot_arm_moveit_config)/launch/turtlebot_arm_moveit.launch">
+    <arg name="sim" value="false"/>
+  </include>
+
+  <node name="shapeClassifier" pkg="ball_tracking" type="shapeCalssifierROS.py" output="screen"/>
+  <node name="arm_driver" pkg="ball_tracking" type="arm_driver.py" output="screen"/>
+</launch>

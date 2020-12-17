@@ -72,7 +72,7 @@ def compare(ref, feat):
 
 def predict(img, classes, ref, mode=0):
     processed = preprocess(img)
-    contours, _ = cv.findContours(processed, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
+    _, contours, _ = cv.findContours(processed, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
     min_dist = float('inf')
     max_similarity = -float('inf')
     contour = None
@@ -87,7 +87,7 @@ def predict(img, classes, ref, mode=0):
                     contour = cnt
                     min_dist = dist
                     pred = c
-                elif dist > max_similarity:
+                elif mode != 0 and dist > max_similarity:
                     contour = cnt
                     max_similarity = dist
                     pred = c
